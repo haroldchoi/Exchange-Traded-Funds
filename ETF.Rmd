@@ -1,0 +1,182 @@
+---
+title: "Exchange Traded Funds"
+author: "Harold Choi"
+date: "26 Oct 2020"
+output: html_document
+
+---
+
+```{r setup, error=FALSE, warning=FALSE, message=FALSE }
+library(QRM)
+library(qrmtools)
+library(readr)
+library(tidyverse)
+library(zoo)
+library(xts)
+library(quantmod)
+library(ggplot2)
+library(magrittr)
+library(broom)
+library(lubridate)
+library(PerformanceAnalytics)
+```
+
+## Reading the data
+
+* In this investigation, the following are the 4 ETFs - VOO, QQQ, XBI, VYM are selected from NYSE which are listed in US and analyzed. They are considered to be among the best ETFs  for many years.  This investigation will compare and benchmark their performance with the S&P500 to compare how they fare in terms of risk, returns, standard deviation, correlations and dividend paid. The data used is generated from Yahoo Finance and is from 2016-01-04 to 2020-10-21. 
+
+* ^GSPC: S&P500
+
+* VOO: Vanguard 500 Index Fund ETF invests in stocks in the S&P 500 Index, representing 500 of the largest U.S. companies.  VOO offers high potential for investment growth, their share value rises and falls more sharply than that of funds holding bonds and is more appropriate for long-term goals where money growth is essential.
+
+* QQQ: Tracks the Nasdaq 100 Index and focuses on large international and U.S. companies in the technology, healthcare, industrial, consumer discretionary, and telecommunications sectors. Where the S&P 500 tracks large-cap stocks across both major US stock exchanges, QQQ is limited to just the NASDAQ, so you can expect investment to be more heavily influenced by big news in the technology sector more than other industries.
+
+* XBI: SPDR S&P Biotech ETF. XBI tracks an equal-weighted index of US biotechnology stocks. XBI is one of a handful of biotech ETFs available, offering exposure to a corner of the market that can perform well during periods of consolidation and is capable of big jumps in the event of major drug approvals.
+
+* VYM: Vanguard High Dividend Yield ETF seeks to track the performance of the FTSE® High Dividend Yield Index, which measures the investment return of common stocks of companies characterized by high dividend yields. VYM provides a convenient way to track the performance of stocks that are forecasted to have above-average dividend yields and follows a passively managed, full-replication approach.
+
+
+```{r echo=FALSE}
+mystocks <- new.env(hash=TRUE)
+getSymbols(c("QQQ", "XBI", "VYM", "VOO", "^GSPC"), env=mystocks, from ="2016-01-04", to ="2020-10-22")
+etf <- do.call(cbind,eapply(mystocks, Ad))
+``` 
+
+``` {r echo=FALSE, results='hide',message=FALSE}
+dim(etf)
+colnames(etf)
+head(etf)
+str(etf)
+```
+
+## Calculating returns 
+* The returns are calculated on a daily basis from 2016-01-24 to 2020-10-21 and an average is generated for each month. In total there are 57 monthly periods. 
+```{r, error=FALSE, warning=FALSE, message=FALSE}
+etf1 <- apply.monthly(etf, mean)
+etf1_return_discrete = Return.calculate(etf1, method = c("discrete"))
+head(etf1)
+str(etf1)
+```
+
+
+
+## Performance charts 
+
+* QQQ appears to be ahead in terms of cumulative return while VOO is second with VYM and XBI coming close behind. 
+* The cumulative returns represents the total change in investment price over a set time. 
+
+``` {r echo=FALSE, results='hide',message=FALSE}
+chart.CumReturns(etf1_return_discrete[,c(1:5)],
+                 main='ETF Absolute Performance', legend.loc="topleft", lwd=5)
+
+plot.zoo(etf1)
+
+```
+
+* The second chart shows the daily returns overlaid with a rolling measure of tail risk referred as a modified VAR.
+* VOO Value at Risk is at -1.76%, this means that in a day there is a 5% probability that VOO return could lose more than 1.76%. 
+* QQQ is at -2.14%, XBI at -3.25% and VYM at -1.66%. Therefore, XBI has the highest historical VaR. 
+``` {r}
+par(mfrow=c(2,1))
+
+chart.BarVaR(etf1_return_discrete[,2], methods="HistoricalVaR",lty=1, lwd=2, main="VOO Daily Return with Historical VaR", legend.loc="topright", colorset=3)
+chart.BarVaR(etf1_return_discrete[,3], gap=12, methods="HistoricalVaR",lty=1, lwd=2, main='QQQ Daily Return with Historical VaR', legend.loc="topright", colorset=3)
+chart.BarVaR(etf1_return_discrete[,4], gap=12, methods="HistoricalVaR",lty=1, lwd=2, main='XBI Daily Return with Historical VaR', legend.loc="topright", colorset=3)
+chart.BarVaR(etf1_return_discrete[,5], gap=12, methods="HistoricalVaR",lty=1, lwd=2, main='VYM Daily Return with Historical VaR', legend.loc="topright", colorset=3)
+
+```
+``` {r echo=FALSE, results='hide',message=FALSE}
+VaR(etf1_return_discrete[,2], p=0.95, method="historical")
+VaR(etf1_return_discrete[,3], p=0.95, method="historical")
+VaR(etf1_return_discrete[,4], p=0.95, method="historical")
+VaR(etf1_return_discrete[,5], p=0.95, method="historical")
+```
+
+* The drawdown refers to how much the ETF is down from the peak before it recovers back to the peak. XBI appears to have the greatest negative drawdown which means the highest downside volatility.
+* Based on the table, QQQ has the highest average discrete monthly return 1.94%, VOO at 1.27%, XBI at 1.50%, VYM at 0.81%. 
+``` {r}
+chart.Drawdown(etf1_return_discrete[,c(1:5)],main='Drawdown Performance',
+               legend.loc="bottomleft", lwd=4)
+
+table.Stats(etf1_return_discrete[,c(1:5)])
+
+```
+
+
+## Comparing distribution using boxplots
+* Through the boxplot diagram, XBI has the greatest variability as since from the widest box among the 5 investments. In terms of return, QQQ is the highest and since a slighly higher variability in terms of the upward returns of the stock price. VYM has the smallest variability among the 5 investments and this shows that VYM has the lowest volatility in terms of discrete returns. 
+```{r}
+chart.Boxplot(etf1_return_discrete[,c(1:5)], main = "Trailing 36-Month Returns")
+```
+
+* The three lines plot show the slope of 1,2,3 for the sharpe ratio. VOO offers a higher annualized return fpr the same annualized risk as the index fund invests in the S&P500 stocks. * In addition, QQQ has the strongest return-risk reward while XBI has the highest annualized risk. 
+``` {r}
+chart.RiskReturnScatter(etf1_return_discrete[,c(1:5)],
+                        main = "Trailing Performance", 
+                        colorset=rainbow6equal)
+```
+
+## Measuring performance consistency 
+* Rolling performance is typically used as a way to assess stability of a return stream. 
+* For XBI,  there was a drop from Apr 19 however the index price shot up in Sep 2019 and dipped to a trough again in Feb 2020, eventually peaking due to the coronavirus that has played a huge role in their returns due to the biomedical nature of XBI. 
+* VYM follows a similar trend as XBI however since Mar 2020 the price have not rebound as quickly as the other indexes. 
+
+``` {r}
+charts.RollingPerformance(etf1_return_discrete[,c(1:5)],
+                          width = 12,
+                          main="Rolling 12-Month Performance",
+                          legend.loc="topleft",
+                          lwd=2)
+
+``` 
+
+## Measuring relative performance
+* Identifying and using a benchmark can help us assess and explain how well in terms of meeting investment objectives, in terms of a widely held substitute. In this case, the S&P500 is used as a benchmark. 
+``` {r}
+chart.RelativePerformance(etf1_return_discrete[,c(2:5), drop =FALSE], 
+                         etf1_return_discrete[,1,drop =FALSE],
+                          colorset = rainbow6equal, 
+                          lwd = 6, 
+                          legend.loc = "topleft",
+                          main="Relative performance to  S&P500")
+``` 
+
+* QQQ has the highest alpha at 0.82% based off a monthly period. 
+* XBI has the highest beta at 1.1795 which means that XBI is theoretically more volative than the market. While VYM has a the lowest beta at 0.9151 which means that VYM is theoretically less volatile than the market.
+* XBI has a relative low R squared at 0.4587 almost two times lower than QQQ and VYM, this effectively means XBI do not move in as much tandem with the S&P500 benchmark as compared to QQQ, VYM and VOO. 
+* QQQ has the highest Treynor ratio which indicates that it generated 0.24 excess return for each unit of risk taken on. 
+* 
+``` {r}
+table.CAPM(etf1_return_discrete[,c(2:5), drop =FALSE], 
+           etf1_return_discrete[,c(1),drop =FALSE],)
+
+charts.RollingRegression(etf1_return_discrete[,c(2:5), drop =FALSE], 
+                         etf1_return_discrete[,c(1),drop =FALSE],
+                          ,lwd = 10,
+                         legend.loc = "topright")
+
+BetaCoVariance(etf1_return_discrete[,c(2:5), drop =FALSE], 
+                         etf1_return_discrete[,c(1),drop =FALSE])
+
+
+chart.RollingCorrelation(etf1_return_discrete[,c(2:5), drop =FALSE], 
+                         etf1_return_discrete[,c(1),drop =FALSE],
+                         lwd = 2, 
+                         main = "Rolling Correlation",
+                         legend.loc = "bottomright")
+
+table.Correlation(etf1_return_discrete[,c(2:5), drop =FALSE], 
+                  etf1_return_discrete[,c(1),drop =FALSE])
+
+```
+
+## Downside Risk
+* Semi deviation looks only at negative price fluctuation and is an alternative measurement to standard deviation or variance. It is used to evaluate the downside risk of an investment. A higher number represents greater fluctuations in the negative price of the ETF.
+
+* Gain deviation is similar calculation to standard deviation and the opposite of loss deviation. It calculates the deviation using only up period returns, variances and the mumber of up periods, a higher number is means there is more deviation in the gains of the ETF.
+
+* Loss deviation is similar to standard deviation but calculates the deviation using only the down period returns, variances and number of down periods. 
+``` {r}
+table.DownsideRisk(etf1_return_discrete[,1:5])
+
+``` 
